@@ -1,0 +1,15 @@
+[Unit]
+Description=Bufu Robot (hardware disabled until explicitly enabled)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/bufu-robot
+Environment=LD_LIBRARY_PATH=/opt/bufu-robot/vendor_media/lib/aarch64:/opt/bufu-robot/vendor_media/dds/aarch64/lib
+ExecStart=/opt/bufu-robot/.venv/bin/python /opt/bufu-robot/robot_service.py
+Restart=no
+UMask=0077
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target
