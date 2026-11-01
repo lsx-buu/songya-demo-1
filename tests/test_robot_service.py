@@ -8,12 +8,13 @@ import robot_service
 
 def test_service_defaults_are_hardware_disabled(tmp_path):
     assert robot_service.load_config(tmp_path)['hardware_enabled'] is False
+    assert robot_service.load_config(tmp_path)['gestures_enabled'] is False
 
 
 def test_disabled_runtime_never_imports_devices_or_cloud_listener(monkeypatch):
     original = builtins.__import__
     def guarded(name,*args,**kwargs):
-        if name in ('outfit.microphone','outfit.voice_trigger','outfit.robot_audio','outfit.capture'):
+        if name in ('outfit.microphone','outfit.voice_trigger','outfit.robot_audio','outfit.capture','highcontrol_py'):
             raise AssertionError('Disabled service cannot import device components')
         return original(name,*args,**kwargs)
     monkeypatch.setattr(builtins,'__import__',guarded)

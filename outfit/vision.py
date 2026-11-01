@@ -50,6 +50,9 @@ def _parse_content(content: str) -> dict:
         if not isinstance(raw, str):
             raise ProviderContentError('模型返回的点评格式无效，请重试')
         result[key] = raw.strip()[:limit]
+    result['suggestion'] = ''
+    if value['status'] == 'retake':
+        result['roast'] = ''
     if value['status'] == 'ok' and (not result['title'] or not result['roast']):
         raise ProviderContentError('模型返回的点评内容为空，请重试')
     if value['status'] == 'retake' and not result['reason']:

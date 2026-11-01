@@ -12,7 +12,9 @@ import uuid
 ROOT = Path(__file__).resolve().parent
 DEFAULTS = {'hardware_enabled': False, 'trigger': '锐评一下', 'camera': '/dev/video2',
             'sdk_root': str(ROOT / 'vendor_media'), 'mic_channel': 0,
-            'source_announcement': True}
+            'source_announcement': True, 'gestures_enabled': False,
+            'wave_verified': False, 'thinking_verified': False,
+            'thinking_teach_index': None, 'gesture_sdk_root': ''}
 
 
 def load_config(root=ROOT):
@@ -33,6 +35,8 @@ def load_config(root=ROOT):
         raise ValueError('请明确设置彩色相机节点')
     if not isinstance(values['sdk_root'], str) or not Path(values['sdk_root']).is_absolute():
         raise ValueError('媒体SDK需为明确的绝对路径')
+    from outfit.gestures import validate_config
+    validate_config(values)
     return values
 
 
@@ -59,6 +63,8 @@ def run_enabled(config, stop, root=ROOT):
     from outfit.vision import review_image
     from outfit.voice_trigger import wait_for_trigger
     from outfit.audit import append_event
+    from outfit.gestures import GesturePlayer
+    from outfit.performance import perform_turn
     vision, voice = Settings(root).read(), VoiceConfig(root).read()
     if not vision['api_key'] or not vision['model'] or not voice['app_id'] or not voice['access_key']:
         raise ValueError('请先完成视觉与声音配置')
@@ -67,6 +73,16 @@ def run_enabled(config, stop, root=ROOT):
     if controller.init() is False:
         raise ValueError('媒体接口初始化失败')
     require_ready(controller)
+    def permitted():
+        return not stop.is_set() and load_config(root)['hardware_enabled'] is True
+    def gesture_permitted():
+        current = load_config(root)
+        # New settings require a restart; hot changes may only revoke permission.
+        keys = ('gestures_enabled', 'wave_verified', 'thinking_verified',
+                'thinking_teach_index', 'gesture_sdk_root')
+        return permitted() and current['gestures_enabled'] is True and all(
+            current[key] == config[key] for key in keys)
+    gestures = GesturePlayer(config, stop, permitted=gesture_permitted)
     while not stop.is_set():
         # A change to enabled=false also stops the cloud microphone session.
         listening_stop = threading.Event()
@@ -94,23 +110,13 @@ def run_enabled(config, stop, root=ROOT):
         if not triggered:
             continue
         run_id = uuid.uuid4().hex
-        status(root, 'reviewing', run_id=run_id)
-        image = normalize_image(capture_image(config['camera']))
-        result = review_image(image, vision['model'], vision['api_key'])
-        trace = dict(result['provenance'], run_id=run_id)
-        append_event(root, 'vision', trace)
-        text = result['roast'] if result['status'] == 'ok' else '这一张没看清穿搭，站到镜头前再说一次锐评一下吧。'
-        if config.get('source_announcement', True):
-            text = '布米嘴替开评。' + text
-        if stop.is_set() or not load_config(root)['hardware_enabled']: return
-        status(root, 'synthesizing', run_id=run_id, model=trace.get('response_model') or vision['model'],
-               provider_response_id=trace.get('response_id'), provider_request_id=trace.get('request_id'))
-        audio = synthesize(text, voice, on_provenance=lambda details: append_event(root, 'speech', dict(details, run_id=run_id)))
-        if stop.is_set() or not load_config(root)['hardware_enabled']: return
-        status(root, 'speaking', run_id=run_id, provider_response_id=trace.get('response_id'))
         # Microphone is already unsubscribed, so our output cannot trigger itself.
-        playback = publish_wav(audio, enabled=True, sdk=sdk, controller=controller, stop=stop)
-        append_event(root, 'playback', dict(playback, run_id=run_id))
+        perform_turn(config, stop, root, run_id, vision=vision, voice=voice,
+            gestures=gestures, capture=capture_image, normalize=normalize_image,
+            review=review_image, synthesize=synthesize,
+            playback=lambda audio, **kwargs: publish_wav(audio, enabled=True,
+                sdk=sdk, controller=controller, **kwargs),
+            record=append_event, report=status, permitted=permitted)
         if stop.wait(2): return
 
 
@@ -121,12 +127,18 @@ def main(argv=None):
     os.umask(0o077)
     from outfit.config import Settings
     from outfit.speech import VoiceConfig
+    from outfit.prompts import PROMPT_VERSION
     config = load_config()
     if args.check:
         sdk = Path(config['sdk_root'])
         print(json.dumps({'vision_configured': Settings(ROOT).public()['configured'],
               'voice_configured': VoiceConfig(ROOT).public()['configured'],
               'hardware_enabled': config['hardware_enabled'], 'trigger': config['trigger'],
+              'gestures_enabled': config['gestures_enabled'],
+              'wave_verified': config['wave_verified'],
+              'thinking_verified': config['thinking_verified'],
+              'thinking_teach_index': config['thinking_teach_index'],
+              'prompt_version': PROMPT_VERSION,
               'media_binary_present': any(path.stat().st_size > 0 for path in (sdk/'build').glob('mediacontrol_py*.so')),
               'dds_config_present': (sdk/'config/dds.xml').is_file(),
               'hardware_sdk_loaded': False}, ensure_ascii=False))
@@ -146,7 +158,9 @@ def main(argv=None):
         try:
             config = load_config()
             if not config['hardware_enabled']:
-                status(ROOT, 'standby_disabled', trigger=config['trigger'], hardware_sdk_loaded=False)
+                status(ROOT, 'standby_disabled', trigger=config['trigger'],
+                       gestures_enabled=config['gestures_enabled'],
+                       prompt_version=PROMPT_VERSION, hardware_sdk_loaded=False)
                 # Enabling requires an explicit restart, preventing silent activation.
                 stop.wait()
             else:

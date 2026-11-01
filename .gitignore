@@ -9,6 +9,7 @@ data/
 .env
 .env.*
 vendor_media/
+vendor_motion/
 vendor_sdk/
 vendor_official_sdk/
 __pycache__/

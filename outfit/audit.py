@@ -12,9 +12,10 @@ _SCALARS = {'source', 'endpoint', 'configured_model', 'response_model', 'respons
             'client_call_id', 'prompt_version', 'image_sha256', 'started_at', 'elapsed_ms',
             'transport', 'voice_model', 'speaker', 'mode', 'event', 'client_session_id',
             'request_id', 'text_sha256', 'wav_sha256', 'duration_seconds', 'run_id',
-            'status', 'frames_sent', 'audibility_verified'}
+            'status', 'frames_sent', 'audibility_verified', 'phase', 'action',
+            'command', 'index', 'reason', 'observed'}
 _USAGE_KEYS = {'prompt_tokens', 'completion_tokens', 'total_tokens', 'input_tokens', 'output_tokens'}
-_KINDS = {'vision', 'speech', 'playback'}
+_KINDS = {'vision', 'speech', 'playback', 'gesture'}
 
 
 def _now():

@@ -15,6 +15,9 @@ PROJECT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = {'hardware_enabled': False, 'trigger': '锐评一下',
                   'camera': '/dev/video2', 'camera_note': '候选节点，尚未验证',
                   'sdk_root': str((PROJECT / 'vendor_media').resolve()), 'mic_channel': 0,
+                  'gestures_enabled': False, 'wave_verified': False,
+                  'thinking_verified': False, 'thinking_teach_index': None,
+                  'gesture_sdk_root': '',
                   'version': 'Bufu-Robot-0.2.0'}
 
 
@@ -36,6 +39,8 @@ def write_robot_config(project=PROJECT, *, sdk_root=None):
         raise RuntimeError('robot.json的hardware_enabled必须是布尔值')
     if value.get('hardware_enabled') is True:
         raise RuntimeError('检测到硬件已启用，安装器不会自动修改或启动它')
+    if type(value.get('gestures_enabled', False)) is not bool or value.get('gestures_enabled', False):
+        raise RuntimeError('安装器要求动作开关为false，不修改已启用的动作配置')
     merged = dict(DEFAULT_CONFIG, sdk_root=str((Path(project)/'vendor_media').resolve()))
     merged.update(value)
     if sdk_root:
